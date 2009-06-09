@@ -19,6 +19,28 @@
     <url>http://graniec.pl/</url>
     
     <dependencies>
+
+        <!-- Pulpcore -->
+        <dependency>
+            <groupId>com.interactivepulp</groupId>
+            <artifactId>pulpcore</artifactId>
+            <version>0.11.5</version>
+        </dependency>
+        
+        <!-- Light 2D -->
+        <dependency>
+            <groupId>pl.graniec</groupId>
+            <artifactId>cr-light2d</artifactId>
+            <version>0.2</version>
+        </dependency>
+        
+        <!-- Pulpcore Desktop for tests -->
+        <dependency>
+            <groupId>pl.graniec</groupId>
+            <artifactId>cr-pulpcore-desktop</artifactId>
+            <version>0.5</version>
+            <scope>test</scope>
+        </dependency>
     
         <!-- JUnit -->
         <dependency>
