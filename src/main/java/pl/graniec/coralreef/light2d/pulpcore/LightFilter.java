@@ -28,7 +28,15 @@
  */
 package pl.graniec.coralreef.light2d.pulpcore;
 
-import java.util.Arrays;
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.Polygon;
+import java.awt.image.BufferedImage;
+import java.awt.image.DataBufferInt;
+import java.io.File;
+import java.io.IOException;
+
+import javax.imageio.ImageIO;
 
 import pl.graniec.coralreef.geometry.Geometry;
 import pl.graniec.coralreef.geometry.Point2;
@@ -41,26 +49,17 @@ import pulpcore.image.filter.Filter;
  */
 public class LightFilter extends Filter {
 
-	private static class Node {
-		int x, y;
-
-		public Node(int x, int y) {
-			super();
-			this.x = x;
-			this.y = y;
-		}
-		
-	}
-	
 	/** Geometry of the light */
 	private Geometry lightGeometry;
-	/** Center point of the light */
-	private int centerX, centerY;
+	/** java.awt.BufferedImage to help making the mask */
+	private BufferedImage mask;
 	
 	/**
 	 * 
 	 */
 	public LightFilter() {
+//		image = new BufferedImage(Stage.getWidth(), Stage.getHeight(), BufferedImage.TYPE_INT_ARGB);
+		mask = new BufferedImage(640, 480, BufferedImage.TYPE_INT_ARGB);
 	}
 	
 	/* (non-Javadoc)
@@ -71,6 +70,54 @@ public class LightFilter extends Filter {
         // TODO Auto-generated method stub
         return null;
     }
+	
+	private void createMask(CoreImage input) {
+		
+		if (input != null && (mask == null || input.getWidth() != mask.getWidth() || input.getHeight() != mask.getHeight())) {
+			mask = new BufferedImage(input.getWidth(), input.getHeight(), BufferedImage.TYPE_INT_ARGB);
+		}
+		
+		final Graphics2D g = mask.createGraphics();
+		
+		// clear image
+		g.setColor(Color.BLACK);
+		g.fillRect(0, 0, mask.getWidth(), mask.getHeight());
+		
+		// make the polygon
+		final Polygon poly = new Polygon();
+		
+		for (Point2 p : lightGeometry.getVerticles()) {
+			poly.addPoint((int) p.x, (int) p.y);
+		}
+		
+		g.setColor(Color.WHITE);
+		g.fillPolygon(poly);
+		
+		g.dispose();
+	}
+	
+	public void testMask() {
+		createMask(null);
+		try {
+			ImageIO.write(mask, "PNG", new File("/tmp/mask.png"));
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		
+		System.out.println(mask.getRaster().getDataBuffer().getClass());
+	}
+	
+	public static void main(String[] args) {
+		LightFilter filter = new LightFilter();
+		
+		Geometry geom = new Geometry();
+		geom.addVerticle(new Point2(0, 0));
+		geom.addVerticle(new Point2(100, 50));
+		geom.addVerticle(new Point2(100, 100));
+		
+		filter.setLightGeometry(geom);
+		filter.testMask();
+	}
     
     /* (non-Javadoc)
      * @see pulpcore.image.filter.Filter#filter(pulpcore.image.CoreImage, pulpcore.image.CoreImage)
@@ -85,98 +132,27 @@ public class LightFilter extends Filter {
         final int[] srcPixels = input.getData();
         final int[] dstPixels = output.getData();
         
-        // make all pixels invisible
-        Arrays.fill(dstPixels, 0);
+        // create the mask
+        createMask(input);
         
-        // draw geometry lines
-        Point2 first = null;
-        Point2 prev, next = null;
+        final int[] maskPixels = ((DataBufferInt) mask.getData().getDataBuffer()).getData();
         
-        for (Point2 p : lightGeometry.getVerticles()) {
-        	if (first == null) {
-        		first = p;
-        	}
+        // copy pixels
+        for (int i = 0; i < srcPixels.length; ++i) {
         	
-        	prev = next;
-        	next = p;
-        	
-        	if (prev != null) {
-        		line((int) prev.x, (int) prev.y, (int) next.x, (int) next.y, output);
+        	if (maskPixels[i] == 0xFF000000) {
+        		dstPixels[i] = 0x0;
+        	} else {
+        		dstPixels[i] = srcPixels[i];
         	}
         }
-        
-        if (next != null && first != next) {
-        	line((int) first.x, (int) first.y, (int) next.x, (int) next.y, output);
-        }
-        
         
     }
 
-    public void setLightGeometry(Geometry lightGeometry, int centerX, int centerY) {
+    public void setLightGeometry(Geometry lightGeometry) {
         this.lightGeometry = lightGeometry;
-        this.centerX = centerX;
-        this.centerY = centerY;
-    }
-    
-    private void line(int x0, int y0, int x1, int y1, CoreImage out) {
-        int tmp;
-        final int[] pixels = out.getData();
-        final int imageWidth = out.getWidth();
         
-        int Dx = x1 - x0; 
-        int Dy = y1 - y0;
-        boolean steep = (Math.abs(Dy) >= Math.abs(Dx));
-        if (steep) {
-            //SWAP(x0, y0);
-            tmp = x0;
-            x0 = y0;
-            y0 = tmp;
-           
-            //SWAP(x1, y1);
-            tmp = x1;
-            x1 = y1;
-            y1 = tmp;
-           
-            // recompute Dx, Dy after swap
-            Dx = x1 - x0;
-            Dy = y1 - y0;
-        }
-        
-        int xstep = 1;
-       
-        if (Dx < 0) {
-            xstep = -1;
-            Dx = -Dx;
-        }
-        int ystep = 1;
-        if (Dy < 0) {
-            ystep = -1;        
-            Dy = -Dy; 
-        }
-        int TwoDy = 2*Dy; 
-        int TwoDyTwoDx = TwoDy - 2*Dx; // 2*Dy - 2*Dx
-        int E = TwoDy - Dx; //2*Dy - Dx
-        int y = y0;
-        int xDraw, yDraw;    
-        for (int x = x0; x != x1; x += xstep) {        
-            if (steep) {            
-                xDraw = y;
-                yDraw = x;
-            } else {            
-                xDraw = x;
-                yDraw = y;
-            }
-            // plot
-            //plot(xDraw, yDraw);
-            pixels[yDraw * imageWidth + xDraw] = 0xFFFFFFFF;
-            // next
-            if (E > 0) {
-                E += TwoDyTwoDx; //E += 2*Dy - 2*Dx;
-                y = y + ystep;
-            } else {
-                E += TwoDy; //E += 2*Dy;
-            }
-        }
+        setDirty();
     }
 
 }
